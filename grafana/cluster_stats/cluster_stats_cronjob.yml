@@ -24,21 +24,36 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          securityContext:            # namespace enforces PodSecurity "restricted"
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
           - name: stats
             image: python:3.12-slim
             workingDir: /tmp        # writable: pip cache, output PNG/HTML
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
             command: ["/bin/sh", "-c"]
             args:
               - |
                 set -e
-                pip install -q matplotlib
+                pip install -q --user matplotlib
                 python3 -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/RationAI/cronjobs/main/grafana/cluster_stats/cluster_stats.py', 'cluster_stats.py')"
                 python3 cluster_stats.py
             envFrom:
             - secretRef:
                 name: cluster-stats-secrets
             env:
+            - name: HTTPS_PROXY      # namespace has no direct egress; same MUNI proxy
+              value: http://proxy.ics.muni.cz:3128  # the normal jobs use
+            - name: NO_PROXY        # Grafana is reachable directly, keep it off the proxy
+              value: grafana.rationai.cloud.trusted.e-infra.cz,svc.cluster.local
+            - name: HOME           # writable HOME so pip --user and matplotlib work
+              value: /tmp
             - name: MPLCONFIGDIR     # matplotlib needs a writable config dir
               value: /tmp
             # Uncomment if the pods can't reach the external Grafana URL and
