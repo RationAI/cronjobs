@@ -14,7 +14,8 @@ metadata:
   name: cluster-stats
   namespace: rationai-jobs-ns
 spec:
-  schedule: "0 8 1 * *"           # 1st of month 08:00 UTC (k8s cron is UTC!)
+  schedule: "0 0 1 * *"           # 1st of month 00:00 Europe/Prague (see timeZone)
+  timeZone: "Europe/Prague"       # DST-safe; k8s cron would otherwise be UTC
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1    # keep last job around for logs
   failedJobsHistoryLimit: 1
