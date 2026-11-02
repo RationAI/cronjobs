@@ -1,0 +1,10 @@
+# real secrets never go public
+*.local.yml
+
+# outputs (contain cluster data / user job names)
+*.png
+*.html
+
+# python
+__pycache__/
+*.pyc

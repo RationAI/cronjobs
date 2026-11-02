@@ -1,0 +1,47 @@
+# Monthly cluster-stats report — fetches cluster_stats.py from the PUBLIC
+# GitHub repo at runtime (no auth needed), sends summary + dashboard PNG to
+# the Slack channel. Upgrading the script = git push; nothing to rebuild.
+#
+# Deploy:  cp grafana/cluster_stats/cluster_stats_secrets.yml grafana/cluster_stats/cluster_stats_secrets.local.yml
+#          (fill in the two tokens) && kubectl apply -f grafana/cluster_stats/cluster_stats_secrets.local.yml
+#          kubectl apply -f grafana/cluster_stats/cluster_stats_cronjob.yml
+# Test now (don't wait for the 1st of the month):
+#          kubectl -n rationai-jobs-ns create job --from=cronjob/cluster-stats cluster-stats-test
+#          kubectl -n rationai-jobs-ns logs -f job/cluster-stats-test
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cluster-stats
+  namespace: rationai-jobs-ns
+spec:
+  schedule: "0 8 1 * *"           # 1st of month 08:00 UTC (k8s cron is UTC!)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1    # keep last job around for logs
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800  # 30 min cap
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: stats
+            image: python:3.12-slim
+            workingDir: /tmp        # writable: pip cache, output PNG/HTML
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                set -e
+                pip install -q matplotlib
+                python3 -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/RationAI/cronjobs/main/grafana/cluster_stats/cluster_stats.py', 'cluster_stats.py')"
+                python3 cluster_stats.py
+            envFrom:
+            - secretRef:
+                name: cluster-stats-secrets
+            env:
+            - name: MPLCONFIGDIR     # matplotlib needs a writable config dir
+              value: /tmp
+            # Uncomment if the pods can't reach the external Grafana URL and
+            # you need the in-cluster one instead:
+            #- name: GRAFANA_URL
+            #  value: https://grafana.rationai.cloud.trusted.e-infra.cz
